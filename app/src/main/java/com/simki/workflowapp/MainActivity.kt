@@ -1,5 +1,6 @@
 package com.simki.workflowapp
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -21,6 +22,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.simki.workflowapp.ui.theme.WorkflowAppTheme
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
+import androidx.compose.ui.platform.LocalContext
+import android.content.SharedPreferences
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,6 +42,7 @@ class MainActivity : ComponentActivity() {
 }
 
 // Data model for a workflow with a name and list of actions
+@kotlinx.serialization.Serializable
 data class Workflow(
     val name: String,
     val actions: List<String> = emptyList()
@@ -43,8 +50,25 @@ data class Workflow(
 
 @Composable
 fun WorkflowApp() {
+    val context = LocalContext.current
+    val sharedPreferences = context.getSharedPreferences("WorkflowPrefs", Context.MODE_PRIVATE)
+
+    // Load workflows and counter from SharedPreferences
+    var workflows by remember {
+        mutableStateOf(loadWorkflows(sharedPreferences))
+    }
+    var workflowCounter by remember {
+        mutableIntStateOf(sharedPreferences.getInt("workflowCounter", 1))
+    }
     var selectedWorkflowIndex by remember { mutableIntStateOf(-1) }
-    var workflows by remember { mutableStateOf(listOf<Workflow>()) }
+
+    // Save workflows and counter whenever they change
+    LaunchedEffect(workflows) {
+        saveWorkflows(sharedPreferences, workflows)
+    }
+    LaunchedEffect(workflowCounter) {
+        sharedPreferences.edit().putInt("workflowCounter", workflowCounter).apply()
+    }
 
     if (selectedWorkflowIndex >= 0) {
         DetailedWorkflowEditor(
@@ -66,19 +90,42 @@ fun WorkflowApp() {
     } else {
         WorkflowHomeScreen(
             workflows = workflows,
+            workflowCounter = workflowCounter,
             onWorkflowsChanged = { workflows = it },
+            onWorkflowCounterChanged = { workflowCounter = it },
             onWorkflowSelected = { selectedWorkflowIndex = it }
         )
     }
 }
 
+// Load workflows from SharedPreferences
+fun loadWorkflows(sharedPreferences: SharedPreferences): List<Workflow> {
+    val json = sharedPreferences.getString("workflows", null)
+    return if (json != null) {
+        try {
+            Json.decodeFromString<List<Workflow>>(json)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    } else {
+        emptyList()
+    }
+}
+
+// Save workflows to SharedPreferences
+fun saveWorkflows(sharedPreferences: SharedPreferences, workflows: List<Workflow>) {
+    val json = Json.encodeToString(workflows)
+    sharedPreferences.edit().putString("workflows", json).apply()
+}
+
 @Composable
 fun WorkflowHomeScreen(
     workflows: List<Workflow>,
+    workflowCounter: Int,
     onWorkflowsChanged: (List<Workflow>) -> Unit,
+    onWorkflowCounterChanged: (Int) -> Unit,
     onWorkflowSelected: (Int) -> Unit
 ) {
-    var workflowCounter by remember { mutableIntStateOf(1) }
     var showCreateDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     var editText by remember { mutableStateOf("") }
@@ -185,7 +232,7 @@ fun WorkflowHomeScreen(
                         actions = if (initialAction.isNotBlank()) listOf(initialAction) else emptyList()
                     )
                     onWorkflowsChanged(workflows + newWorkflow)
-                    workflowCounter++
+                    onWorkflowCounterChanged(workflowCounter + 1)
                     showCreateDialog = false
                 }) {
                     Text("Create")

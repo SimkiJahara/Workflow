@@ -52,6 +52,10 @@ dependencies {
     implementation(libs.androidx.material3)
     // Add kotlinx.serialization dependency
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.compose.material3:material3:1.2.1")
+    implementation(platform("androidx.compose:compose-bom:2024.10.00"))
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -175,16 +175,10 @@ fun WorkflowHomeScreen(
         }
     }
 
-    val gradientBackground = Brush.linearGradient(
-        colors = listOf(GradientStart, GradientEnd),
-        start = androidx.compose.ui.geometry.Offset(0f, 0f),
-        end = androidx.compose.ui.geometry.Offset(1000f, 1000f)
-    )
-
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(gradientBackground)
+            .background(MaterialTheme.colorScheme.background) // Use solid background
             .padding(Spacing.medium)
     ) {
         Text(
@@ -231,9 +225,9 @@ fun WorkflowHomeScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Workflow", tint = Color.White)
+                Icon(Icons.Default.Add, contentDescription = "Add Workflow", tint = MaterialTheme.colorScheme.onPrimary)
                 Spacer(modifier = Modifier.width(Spacing.small))
-                Text("Create New Workflow", color = Color.White)
+                Text("Create New Workflow", color = MaterialTheme.colorScheme.onPrimary)
             }
         }
     }
@@ -288,9 +282,6 @@ fun WorkflowCard(
         targetValue = if (isPressed) 0.98f else 1f,
         animationSpec = tween(durationMillis = 150)
     )
-    val cardGradient = Brush.horizontalGradient(
-        colors = listOf(AccentPurple, AccentPink)
-    )
 
     Card(
         modifier = Modifier
@@ -306,46 +297,40 @@ fun WorkflowCard(
                 isPressed = false
             },
         colors = CardDefaults.cardColors(
-            containerColor = Color.Transparent
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
-        Box(
+        Row(
             modifier = Modifier
-                .background(cardGradient)
                 .fillMaxWidth()
+                .padding(Spacing.medium),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
+            Text(
+                text = workflow.name,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(Spacing.medium),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = workflow.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(end = Spacing.medium),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    .weight(1f)
+                    .padding(end = Spacing.medium),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Row {
+                ActionIconButton(
+                    icon = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "View Details",
+                    onClick = onSelectClick,
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
-                Row {
-                    ActionIconButton(
-                        icon = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "View Details",
-                        onClick = onSelectClick,
-                        tint = Color.White
-                    )
-                    ActionIconButton(
-                        icon = Icons.Default.Delete,
-                        contentDescription = "Delete Workflow",
-                        onClick = onDeleteClick,
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
+                ActionIconButton(
+                    icon = Icons.Default.Delete,
+                    contentDescription = "Delete Workflow",
+                    onClick = onDeleteClick,
+                    tint = MaterialTheme.colorScheme.error
+                )
             }
         }
     }
@@ -363,10 +348,7 @@ fun ActionIconButton(
         modifier = Modifier
             .size(40.dp)
             .background(
-                Brush.radialGradient(
-                    colors = listOf(tint.copy(alpha = 0.2f), Color.Transparent),
-                    radius = 100f
-                ),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.2f),
                 shape = RoundedCornerShape(8.dp)
             )
     ) {
@@ -408,7 +390,7 @@ fun WorkflowDialog(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentPurple,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 )
@@ -422,7 +404,7 @@ fun WorkflowDialog(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AccentPink,
+                            focusedBorderColor = MaterialTheme.colorScheme.secondary,
                             unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     )
@@ -434,7 +416,7 @@ fun WorkflowDialog(
                 onClick = onConfirm,
                 enabled = isConfirmEnabled,
                 colors = ButtonDefaults.textButtonColors(
-                    contentColor = AccentPurple
+                    contentColor = MaterialTheme.colorScheme.primary
                 )
             ) {
                 Text("Save")
@@ -467,10 +449,6 @@ fun DetailedWorkflowEditor(
     var name by remember { mutableStateOf(workflow.name) }
     var newAction by remember { mutableStateOf("") }
 
-    val gradientBackground = Brush.verticalGradient(
-        colors = listOf(GradientStart.copy(alpha = 0.1f), GradientEnd.copy(alpha = 0.1f))
-    )
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -480,7 +458,7 @@ fun DetailedWorkflowEditor(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = AccentPurple
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 },
@@ -496,7 +474,7 @@ fun DetailedWorkflowEditor(
             Column(
                 modifier = modifier
                     .fillMaxSize()
-                    .background(gradientBackground)
+                    .background(MaterialTheme.colorScheme.background)
                     .padding(padding)
                     .padding(Spacing.medium)
             ) {
@@ -510,7 +488,7 @@ fun DetailedWorkflowEditor(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentPurple,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 )
@@ -520,7 +498,7 @@ fun DetailedWorkflowEditor(
                 Text(
                     text = "Actions",
                     style = MaterialTheme.typography.titleMedium,
-                    color = AccentPurple
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 LazyColumn(
@@ -547,7 +525,7 @@ fun DetailedWorkflowEditor(
                             .padding(end = Spacing.small),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AccentPink,
+                            focusedBorderColor = MaterialTheme.colorScheme.secondary,
                             unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     )
@@ -563,7 +541,7 @@ fun DetailedWorkflowEditor(
                         Icon(
                             Icons.Default.Add,
                             contentDescription = "Add Action",
-                            tint = Color.White
+                            tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
                 }
@@ -579,7 +557,7 @@ fun ActionCard(action: String) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp)),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
@@ -592,7 +570,7 @@ fun ActionCard(action: String) {
             Icon(
                 Icons.Default.Edit,
                 contentDescription = null,
-                tint = AccentPurple,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(Spacing.small))
@@ -618,15 +596,11 @@ fun FilledButton(
         animationSpec = tween(durationMillis = 150)
     )
 
-    val buttonGradient = Brush.linearGradient(
-        colors = listOf(GradientStart, GradientEnd)
-    )
-
     Button(
         onClick = onClick,
         modifier = modifier
             .scale(scale)
-            .background(buttonGradient, shape)
+            .background(MaterialTheme.colorScheme.primary, shape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = ripple()
@@ -638,7 +612,7 @@ fun FilledButton(
         shape = shape,
         colors = ButtonDefaults.buttonColors(
             containerColor = Color.Transparent,
-            contentColor = Color.White
+            contentColor = MaterialTheme.colorScheme.onPrimary
         ),
         content = content
     )
@@ -665,10 +639,7 @@ fun FilledIconButton(
         modifier = modifier
             .scale(scale)
             .background(
-                brush = Brush.radialGradient(
-                    colors = listOf(AccentPurple, GradientStart),
-                    radius = 100f
-                ),
+                color = MaterialTheme.colorScheme.primary,
                 shape = RoundedCornerShape(12.dp)
             )
     ) {

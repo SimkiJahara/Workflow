@@ -12,8 +12,8 @@ val Teal40 = Color(0xFF26A69A)
 val Coral60 = Color(0xFFFF8A65)
 val Lemon60 = Color(0xFFFFCA28)
 
-// Accent colors for gradients and buttons
-val GradientStart = Color(0xFF7C4DFF)
-val GradientEnd = Color(0xFF00BFA5)
-val AccentPink = Color(0xFFF06292)
-val AccentPurple = Color(0xFFBA68C8)
+// Accent colors for gradients and buttons (less vibrant, dark theme-friendly)
+val GradientStart = Color(0xFF4A4A8F) // Muted indigo
+val GradientEnd = Color(0xFF2E6A6A)   // Muted teal
+val AccentPink = Color(0xFF9C4F6B)    // Subdued pink
+val AccentPurple = Color(0xFF6D4C8F)  // Subdued purple

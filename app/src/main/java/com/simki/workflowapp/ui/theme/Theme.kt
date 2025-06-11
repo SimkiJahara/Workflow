@@ -23,9 +23,9 @@ private val DarkColorScheme = darkColorScheme(
     onSecondary = Color.White,
     tertiary = Lemon60,
     onTertiary = Color.Black,
-    background = Color(0xFF121212),
-    onBackground = Color(0xFFE0E0),
-    surface = Color(0xFF1A1E1E),
+    background = Color(0xFF121212), // Dark background
+    onBackground = Color(0xFFE0E0E0),
+    surface = Color(0xFF1A1E1E), // Darker surface
     onSurface = Color(0xFFE0E0E0),
     surfaceVariant = Color(0xFF263238),
     onSurfaceVariant = Color(0xFFB0BEC5),
@@ -52,18 +52,10 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun WorkflowAppTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false, // Disable dynamic color to enforce dark theme
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
+    val colorScheme = DarkColorScheme // Always use dark theme
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -71,8 +63,8 @@ fun WorkflowAppTheme(
             val window = (view.context as Activity).window
             window.statusBarColor = colorScheme.background.toArgb()
             window.navigationBarColor = colorScheme.background.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
-            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !darkTheme
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
         }
     }
 

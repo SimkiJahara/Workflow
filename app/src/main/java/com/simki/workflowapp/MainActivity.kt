@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
@@ -37,8 +38,6 @@ import androidx.core.content.edit
 import com.simki.workflowapp.ui.theme.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import androidx.compose.material3.ripple
-import androidx.compose.ui.graphics.Brush
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -167,6 +166,7 @@ fun WorkflowHomeScreen(
     var newWorkflowName by remember { mutableStateOf("") }
     var initialAction by remember { mutableStateOf("") }
     var showDeleteSnackbar by remember { mutableStateOf(false) }
+    val themeState = LocalThemeState.current
 
     LaunchedEffect(showDeleteSnackbar) {
         if (showDeleteSnackbar) {
@@ -178,15 +178,37 @@ fun WorkflowHomeScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background) // Use solid background
+            .background(MaterialTheme.colorScheme.background)
             .padding(Spacing.medium)
     ) {
-        Text(
-            text = "My Workflows",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(bottom = Spacing.medium)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = Spacing.medium),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "My Workflows",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            IconButton(
+                onClick = themeState.toggleTheme,
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(8.dp)
+                    )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Brightness4,
+                    contentDescription = "Toggle Theme",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
 
         LazyColumn(
             modifier = Modifier.weight(1f),
@@ -290,7 +312,7 @@ fun WorkflowCard(
             .clip(RoundedCornerShape(16.dp))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = ripple()
+                indication = androidx.compose.material3.ripple()
             ) {
                 isPressed = true
                 onEditClick()
@@ -603,7 +625,7 @@ fun FilledButton(
             .background(MaterialTheme.colorScheme.primary, shape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = ripple()
+                indication = androidx.compose.material3.ripple()
             ) {
                 isPressed = true
                 onClick()

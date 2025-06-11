@@ -1,19 +1,21 @@
 package com.simki.workflowapp.ui.theme
 
 import android.app.Activity
-import android.os.Build
+import android.content.Context
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.core.content.edit
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
@@ -23,9 +25,9 @@ private val DarkColorScheme = darkColorScheme(
     onSecondary = Color.White,
     tertiary = Lemon60,
     onTertiary = Color.Black,
-    background = Color(0xFF121212), // Dark background
+    background = Color(0xFF121212),
     onBackground = Color(0xFFE0E0E0),
-    surface = Color(0xFF1A1E1E), // Darker surface
+    surface = Color(0xFF1A1E1E),
     onSurface = Color(0xFFE0E0E0),
     surfaceVariant = Color(0xFF263238),
     onSurfaceVariant = Color(0xFFB0BEC5),
@@ -50,12 +52,41 @@ private val LightColorScheme = lightColorScheme(
     onError = Color.White
 )
 
+val LocalThemeState = compositionLocalOf<ThemeState> {
+    error("No ThemeState provided")
+}
+
+data class ThemeState(val isDarkTheme: Boolean, val toggleTheme: () -> Unit)
+
 @Composable
-fun WorkflowAppTheme(
-    dynamicColor: Boolean = false, // Disable dynamic color to enforce dark theme
+fun ProvideThemeState(
+    isDarkTheme: Boolean,
+    toggleTheme: () -> Unit,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = DarkColorScheme // Always use dark theme
+    val themeState = ThemeState(isDarkTheme, toggleTheme)
+    androidx.compose.runtime.CompositionLocalProvider(LocalThemeState provides themeState) {
+        content()
+    }
+}
+
+@Composable
+fun WorkflowAppTheme(
+    content: @Composable () -> Unit
+) {
+    val context = LocalContext.current
+    val sharedPreferences = context.getSharedPreferences("WorkflowPrefs", Context.MODE_PRIVATE)
+    val isDarkTheme = remember {
+        mutableStateOf(sharedPreferences.getBoolean("isDarkTheme", true))
+    }
+
+    SideEffect {
+        sharedPreferences.edit {
+            putBoolean("isDarkTheme", isDarkTheme.value)
+        }
+    }
+
+    val colorScheme = if (isDarkTheme.value) DarkColorScheme else LightColorScheme
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -63,14 +94,18 @@ fun WorkflowAppTheme(
             val window = (view.context as Activity).window
             window.statusBarColor = colorScheme.background.toArgb()
             window.navigationBarColor = colorScheme.background.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
-            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !isDarkTheme.value
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !isDarkTheme.value
         }
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
         typography = ContentStyle,
-        content = content
+        content = {
+            ProvideThemeState(isDarkTheme = isDarkTheme.value, toggleTheme = { isDarkTheme.value = !isDarkTheme.value }) {
+                content()
+            }
+        }
     )
 }

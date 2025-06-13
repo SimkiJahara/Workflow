@@ -13,15 +13,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Brightness4
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,6 +38,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import com.simki.workflowapp.ui.theme.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -111,6 +116,20 @@ fun WorkflowApp() {
                                 )
                             }
                         },
+                        onEditAction = { index, newAction ->
+                            workflows = workflows.toMutableList().also {
+                                val actions = it[selectedWorkflowIndex].actions.toMutableList()
+                                actions[index] = newAction
+                                it[selectedWorkflowIndex] = it[selectedWorkflowIndex].copy(actions = actions)
+                            }
+                        },
+                        onDeleteAction = { index ->
+                            workflows = workflows.toMutableList().also {
+                                val actions = it[selectedWorkflowIndex].actions.toMutableList()
+                                actions.removeAt(index)
+                                it[selectedWorkflowIndex] = it[selectedWorkflowIndex].copy(actions = actions)
+                            }
+                        },
                         modifier = Modifier.padding(padding)
                     )
                 } else {
@@ -166,7 +185,12 @@ fun WorkflowHomeScreen(
     var newWorkflowName by remember { mutableStateOf("") }
     var initialAction by remember { mutableStateOf("") }
     var showDeleteSnackbar by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
     val themeState = LocalThemeState.current
+
+    val filteredWorkflows = workflows.filter {
+        it.name.contains(searchQuery, ignoreCase = true)
+    }
 
     LaunchedEffect(showDeleteSnackbar) {
         if (showDeleteSnackbar) {
@@ -181,6 +205,19 @@ fun WorkflowHomeScreen(
             .background(MaterialTheme.colorScheme.background)
             .padding(Spacing.medium)
     ) {
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            label = { Text("Search Workflows") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = Spacing.medium),
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -212,19 +249,19 @@ fun WorkflowHomeScreen(
 
         LazyColumn(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(Spacing.small)
+            verticalArrangement = Arrangement.spacedBy(Spacing.small, Alignment.Top)
         ) {
-            items(workflows.indices.toList()) { index ->
+            itemsIndexed(filteredWorkflows) { index, workflow ->
                 WorkflowCard(
-                    workflow = workflows[index],
+                    workflow = workflow,
                     onEditClick = {
-                        editingIndex = index
-                        editText = workflows[index].name
+                        editingIndex = workflows.indexOf(workflow)
+                        editText = workflow.name
                         showEditDialog = true
                     },
-                    onSelectClick = { onWorkflowSelected(index) },
+                    onSelectClick = { onWorkflowSelected(workflows.indexOf(workflow)) },
                     onDeleteClick = {
-                        onWorkflowsChanged(workflows.toMutableList().also { it.removeAt(index) })
+                        onWorkflowsChanged(workflows.toMutableList().also { it.removeAt(workflows.indexOf(workflow)) })
                         showDeleteSnackbar = true
                     }
                 )
@@ -240,8 +277,7 @@ fun WorkflowHomeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = Spacing.medium)
-                .height(56.dp),
-            shape = RoundedCornerShape(12.dp)
+                .height(56.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -466,10 +502,13 @@ fun DetailedWorkflowEditor(
     onBack: () -> Unit,
     onRename: (String) -> Unit,
     onAddAction: (String) -> Unit,
+    onEditAction: (Int, String) -> Unit,
+    onDeleteAction: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var name by remember { mutableStateOf(workflow.name) }
     var newAction by remember { mutableStateOf("") }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     Scaffold(
         topBar = {
@@ -490,6 +529,7 @@ fun DetailedWorkflowEditor(
                 )
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
         contentColor = MaterialTheme.colorScheme.onBackground,
         content = { padding ->
@@ -527,10 +567,15 @@ fun DetailedWorkflowEditor(
                     modifier = Modifier
                         .weight(1f)
                         .padding(vertical = Spacing.small),
-                    verticalArrangement = Arrangement.spacedBy(Spacing.small)
+                    verticalArrangement = Arrangement.spacedBy(Spacing.small, Alignment.Top)
                 ) {
-                    items(workflow.actions) { action ->
-                        ActionCard(action = action)
+                    itemsIndexed(workflow.actions) { index, action ->
+                        ActionCard(
+                            action = action,
+                            index = index,
+                            onEdit = onEditAction,
+                            onDelete = onDeleteAction
+                        )
                     }
                 }
 
@@ -567,13 +612,48 @@ fun DetailedWorkflowEditor(
                         )
                     }
                 }
+
+                FilledButton(
+                    onClick = {
+                        workflow.actions.forEach { action ->
+                            println("Executing action: $action")
+                        }
+                        CoroutineScope(Dispatchers.Main).launch {
+                            snackbarHostState.showSnackbar("Workflow executed!")
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = Spacing.medium)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = "Run Workflow",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(Spacing.small))
+                        Text("Run Workflow", color = MaterialTheme.colorScheme.onPrimary)
+                    }
+                }
             }
         }
     )
 }
 
 @Composable
-fun ActionCard(action: String) {
+fun ActionCard(
+    action: String,
+    index: Int,
+    onEdit: (Int, String) -> Unit,
+    onDelete: (Int) -> Unit
+) {
+    var isEditing by remember { mutableStateOf(false) }
+    var editedAction by remember { mutableStateOf(action) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -589,18 +669,54 @@ fun ActionCard(action: String) {
                 .padding(Spacing.medium),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                Icons.Default.Edit,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(Spacing.small))
-            Text(
-                text = action,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            if (isEditing) {
+                OutlinedTextField(
+                    value = editedAction,
+                    onValueChange = { editedAction = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = Spacing.small),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                )
+                ActionIconButton(
+                    icon = Icons.Default.Check,
+                    contentDescription = "Save Action",
+                    onClick = {
+                        if (editedAction.isNotBlank()) {
+                            onEdit(index, editedAction)
+                            isEditing = false
+                        }
+                    },
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            } else {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = "Edit Action",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clickable { isEditing = true }
+                )
+                Spacer(modifier = Modifier.width(Spacing.small))
+                Text(
+                    text = action,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+                ActionIconButton(
+                    icon = Icons.Default.Delete,
+                    contentDescription = "Delete Action",
+                    onClick = { onDelete(index) },
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
         }
     }
 }
@@ -609,7 +725,6 @@ fun ActionCard(action: String) {
 fun FilledButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    shape: RoundedCornerShape = RoundedCornerShape(12.dp),
     content: @Composable RowScope.() -> Unit
 ) {
     var isPressed by remember { mutableStateOf(false) }
@@ -619,24 +734,19 @@ fun FilledButton(
     )
 
     Button(
-        onClick = onClick,
+        onClick = {
+            isPressed = true
+            onClick()
+            isPressed = false
+        },
         modifier = modifier
             .scale(scale)
-            .background(MaterialTheme.colorScheme.primary, shape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = androidx.compose.material3.ripple()
-            ) {
-                isPressed = true
-                onClick()
-                isPressed = false
-            },
-        shape = shape,
+            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp)),
         colors = ButtonDefaults.buttonColors(
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onPrimary
         ),
-        content = content
+        content = { Row(content = content) }
     )
 }
 
@@ -673,3 +783,4 @@ fun FilledIconButton(
         }
     }
 }
+

@@ -1,3 +1,4 @@
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -55,6 +56,7 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2024.10.00"))
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("androidx.compose.material:material-icons-extended:1.6.8")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -63,4 +65,5 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
+
 

@@ -1,10 +1,16 @@
 package com.simki.workflowapp
 
+import android.Manifest
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -18,12 +24,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Brightness4
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -36,28 +38,147 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.ktx.auth
+import com.google.firebase.ktx.Firebase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.Serializable
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import java.io.File
 
 class MainActivity : ComponentActivity() {
+    private lateinit var auth: FirebaseAuth
+    @Suppress("DEPRECATION")
+    private lateinit var googleSignInClient: GoogleSignInClient
+    @Suppress("DEPRECATION")
+    private val signInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        @Suppress("DEPRECATION")
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            firebaseAuthWithGoogle(account.idToken!!)
+        } catch (e: ApiException) {
+            Toast.makeText(this, "Google Sign-In failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun firebaseAuthWithGoogle(idToken: String) {
+        val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(idToken, null)
+        auth.signInWithCredential(credential).addOnCompleteListener(this) { task ->
+            if (task.isSuccessful) {
+                setContent { AppContent() }
+            } else {
+                Toast.makeText(this, "Authentication failed", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    @Suppress("DEPRECATION")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            var isDarkTheme by remember { mutableStateOf(false) }
-            MaterialTheme(
-                colorScheme = if (isDarkTheme) darkColorScheme() else lightColorScheme()
-            ) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    WorkflowApp { isDarkTheme = !isDarkTheme }
+        auth = Firebase.auth
+        @Suppress("DEPRECATION")
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken("641971734866-hf0e54q8su9rqoklq5nf44i4rl29h07o.apps.googleusercontent.com") // Replace with correct Web Client ID
+            .requestEmail()
+            .build()
+        @Suppress("DEPRECATION")
+        googleSignInClient = GoogleSignIn.getClient(this, gso)
+
+        // Request permissions
+        requestPermissions()
+
+        if (auth.currentUser != null) {
+            setContent { AppContent() }
+        } else {
+            setContent { LoginScreen { signInLauncher.launch(googleSignInClient.signInIntent) } }
+        }
+    }
+
+    private fun requestPermissions() {
+        val permissions = mutableListOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        val launcher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+            results.forEach { (permission, granted) ->
+                if (!granted) {
+                    Toast.makeText(this, "$permission denied", Toast.LENGTH_SHORT).show()
                 }
+            }
+        }
+        launcher.launch(permissions.toTypedArray())
+    }
+}
+
+@Composable
+fun AppContent() {
+    var isDarkTheme by remember { mutableStateOf(false) }
+    var currentScreen by remember { mutableStateOf("home") }
+    MaterialTheme(
+        colorScheme = if (isDarkTheme) darkColorScheme() else lightColorScheme()
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Crossfade(targetState = currentScreen) { screen ->
+                when (screen) {
+                    "home" -> WorkflowApp(
+                        onToggleTheme = { isDarkTheme = !isDarkTheme },
+                        onModelScreen = { currentScreen = "model" }
+                    )
+                    "model" -> ModelInvocationScreen(
+                        onBack = { currentScreen = "home" }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LoginScreen(onSignInClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Welcome to Workflow App",
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        FilledButton(
+            onClick = onSignInClick,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Login, contentDescription = "Sign In", tint = MaterialTheme.colorScheme.onPrimary)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Sign in with Google", color = MaterialTheme.colorScheme.onPrimary)
             }
         }
     }
@@ -66,14 +187,14 @@ class MainActivity : ComponentActivity() {
 @Serializable
 data class Category(
     val name: String,
-    val color: String // Hex color code, e.g., "#FF5733"
+    val color: String
 )
 
 @Serializable
 data class Workflow(
     val name: String,
     val actions: List<String> = emptyList(),
-    val category: Category? = null // Nullable to allow uncategorized workflows
+    val category: Category? = null
 )
 
 object Spacing {
@@ -82,7 +203,7 @@ object Spacing {
 }
 
 @Composable
-fun WorkflowApp(onToggleTheme: () -> Unit) {
+fun WorkflowApp(onToggleTheme: () -> Unit, onModelScreen: () -> Unit) {
     val context = LocalContext.current
     val sharedPreferences = context.getSharedPreferences("WorkflowPrefs", Context.MODE_PRIVATE)
     val snackbarHostState = remember { SnackbarHostState() }
@@ -167,6 +288,7 @@ fun WorkflowApp(onToggleTheme: () -> Unit) {
                         onWorkflowCounterChanged = { workflowCounter = it },
                         onWorkflowSelected = { selectedWorkflowIndex = it },
                         onToggleTheme = onToggleTheme,
+                        onModelScreen = onModelScreen,
                         snackbarHostState = snackbarHostState,
                         modifier = Modifier.padding(padding)
                     )
@@ -174,6 +296,158 @@ fun WorkflowApp(onToggleTheme: () -> Unit) {
             }
         }
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ModelInvocationScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    var inputText by remember { mutableStateOf("") }
+    var imagePath by remember { mutableStateOf<String?>(null) }
+    var outputText by remember { mutableStateOf("") }
+    var isProcessing by remember { mutableStateOf(false) }
+    val imagePicker = ActivityResultContracts.GetContent()
+    val imageLauncher = rememberLauncherForActivityResult(imagePicker) { uri ->
+        imagePath = uri?.toString()
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Model Invocation") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        content = { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                OutlinedTextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    label = { Text("Input Text") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                FilledButton(
+                    onClick = { imageLauncher.launch("image/*") },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Select Image")
+                }
+                imagePath?.let {
+                    Text("Selected Image: $it", style = MaterialTheme.typography.bodyMedium)
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    FilledButton(
+                        onClick = {
+                            isProcessing = true
+                            CoroutineScope(Dispatchers.IO).launch {
+                                val result = invokeM1(inputText)
+                                outputText = result
+                                showNotification(context, "M1 Result", result)
+                                isProcessing = false
+                            }
+                        },
+                        modifier = Modifier.weight(1f).padding(end = 8.dp),
+                        enabled = !isProcessing
+                    ) {
+                        Text("Run M1")
+                    }
+                    FilledButton(
+                        onClick = {
+                            isProcessing = true
+                            CoroutineScope(Dispatchers.IO).launch {
+                                val result = invokeM2(inputText, imagePath?.let { File(it) })
+                                outputText = result
+                                showNotification(context, "M2 Result", result)
+                                isProcessing = false
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = !isProcessing && imagePath != null
+                    ) {
+                        Text("Run M2")
+                    }
+                }
+                if (isProcessing) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                }
+                if (outputText.isNotEmpty()) {
+                    Text(
+                        text = "Output: $outputText",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant,
+                                RoundedCornerShape(12.dp)
+                            )
+                            .padding(16.dp)
+                    )
+                }
+            }
+        }
+    )
+}
+
+// Placeholder for M1 (Instruction-following LLM)
+fun invokeM1(input: String): String {
+    return "M1 Output: Processed '$input'"
+}
+
+// Placeholder for M2 (Multimodal LLM)
+fun invokeM2(input: String, image: File?): String {
+    return if (image != null) {
+        "M2 Output: Processed '$input' with image ${image.name}"
+    } else {
+        "M2 Error: No image provided"
+    }
+}
+
+fun showNotification(context: Context, title: String, message: String) {
+    val channelId = "model_results"
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val channel = android.app.NotificationChannel(
+            channelId,
+            "Model Results",
+            android.app.NotificationManager.IMPORTANCE_DEFAULT
+        )
+        val notificationManager = context.getSystemService(android.app.NotificationManager::class.java)
+        notificationManager.createNotificationChannel(channel)
+    }
+
+    val notification = NotificationCompat.Builder(context, channelId)
+        .setSmallIcon(android.R.drawable.ic_dialog_info)
+        .setContentTitle(title)
+        .setContentText(message)
+        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        .build()
+
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+        NotificationManagerCompat.from(context).notify(System.currentTimeMillis().toInt(), notification)
+    }
 }
 
 fun loadWorkflows(sharedPreferences: SharedPreferences): List<Workflow> {
@@ -197,10 +471,10 @@ fun saveWorkflows(sharedPreferences: SharedPreferences, workflows: List<Workflow
 }
 
 val defaultCategories = listOf(
-    Category("Work", "#2196F3"), // Blue
-    Category("Personal", "#4CAF50"), // Green
-    Category("Urgent", "#F44336"), // Red
-    Category("Other", "#9C27B0") // Purple
+    Category("Work", "#2196F3"),
+    Category("Personal", "#4CAF50"),
+    Category("Urgent", "#F44336"),
+    Category("Other", "#9C27B0")
 )
 
 fun loadCategories(sharedPreferences: SharedPreferences): List<Category> {
@@ -245,6 +519,7 @@ fun WorkflowHomeScreen(
     onWorkflowCounterChanged: (Int) -> Unit,
     onWorkflowSelected: (Int) -> Unit,
     onToggleTheme: () -> Unit,
+    onModelScreen: () -> Unit,
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier
 ) {
@@ -328,7 +603,8 @@ fun WorkflowHomeScreen(
                     onClick = {
                         filterCategory = null
                         isFilterDropdownExpanded = false
-                    }
+                    },
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                 )
                 categories.forEach { category ->
                     DropdownMenuItem(
@@ -336,7 +612,8 @@ fun WorkflowHomeScreen(
                         onClick = {
                             filterCategory = category.name
                             isFilterDropdownExpanded = false
-                        }
+                        },
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
                 DropdownMenuItem(
@@ -344,7 +621,8 @@ fun WorkflowHomeScreen(
                     onClick = {
                         showManageCategoriesDialog = true
                         isFilterDropdownExpanded = false
-                    }
+                    },
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
         }
@@ -374,20 +652,38 @@ fun WorkflowHomeScreen(
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground
             )
-            IconButton(
-                onClick = onToggleTheme,
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(8.dp)
+            Row {
+                IconButton(
+                    onClick = onToggleTheme,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Brightness4,
+                        contentDescription = "Toggle Theme",
+                        tint = MaterialTheme.colorScheme.primary
                     )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Brightness4,
-                    contentDescription = "Toggle Theme",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(
+                    onClick = onModelScreen,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Smartphone,
+                        contentDescription = "Model Invocation",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
 
@@ -456,7 +752,7 @@ fun WorkflowHomeScreen(
                 onWorkflowCounterChanged(workflowCounter + 1)
                 showCreateDialog = false
             },
-            onDismiss = { showCreateDialog = false },
+            onDismissRequest = { showCreateDialog = false },
             isConfirmEnabled = newWorkflowName.isNotBlank()
         )
     }
@@ -475,15 +771,16 @@ fun WorkflowHomeScreen(
                 })
                 showEditDialog = false
             },
-            onDismiss = { showEditDialog = false },
-            isConfirmEnabled = editText.isNotBlank()
+            onDismissRequest = { showEditDialog = false },
+            isConfirmEnabled = editText.isNotBlank(),
+            isCancelEnabled = true
         )
     }
 
     if (showCategoryDialog) {
         AlertDialog(
             onDismissRequest = { showCategoryDialog = false },
-            title = { Text("Create New Category") },
+            title = { Text("New Category") },
             text = {
                 Column {
                     OutlinedTextField(
@@ -510,7 +807,7 @@ fun WorkflowHomeScreen(
                                 .menuAnchor(),
                             shape = RoundedCornerShape(12.dp)
                         )
-                        ExposedDropdownMenu(
+                        DropdownMenu(
                             expanded = isColorDropdownExpanded,
                             onDismissRequest = { isColorDropdownExpanded = false }
                         ) {
@@ -533,7 +830,8 @@ fun WorkflowHomeScreen(
                                     onClick = {
                                         selectedColor = color
                                         isColorDropdownExpanded = false
-                                    }
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                 )
                             }
                         }
@@ -551,16 +849,14 @@ fun WorkflowHomeScreen(
                     },
                     enabled = newCategoryName.isNotBlank()
                 ) {
-                    Text("Save")
+                    Text("OK")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showCategoryDialog = false }) {
                     Text("Cancel")
                 }
-            },
-            shape = RoundedCornerShape(16.dp),
-            containerColor = MaterialTheme.colorScheme.surface
+            }
         )
     }
 
@@ -621,9 +917,7 @@ fun WorkflowHomeScreen(
                 TextButton(onClick = { showManageCategoriesDialog = false }) {
                     Text("Done")
                 }
-            },
-            shape = RoundedCornerShape(16.dp),
-            containerColor = MaterialTheme.colorScheme.surface
+            }
         )
     }
 }
@@ -638,7 +932,8 @@ fun WorkflowCard(
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.98f else 1f,
-        animationSpec = tween(durationMillis = 150)
+        animationSpec = tween(durationMillis = 150),
+        label = "scale"
     )
 
     Card(
@@ -745,13 +1040,14 @@ fun WorkflowDialog(
     onInitialActionChange: (String) -> Unit = {},
     onCategoryChange: (Category?) -> Unit,
     onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-    isConfirmEnabled: Boolean
+    onDismissRequest: () -> Unit,
+    isConfirmEnabled: Boolean,
+    isCancelEnabled: Boolean = true
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = onDismissRequest,
         title = {
             Text(
                 text = title,
@@ -809,7 +1105,7 @@ fun WorkflowDialog(
                             unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     )
-                    ExposedDropdownMenu(
+                    DropdownMenu(
                         expanded = expanded,
                         onDismissRequest = { expanded = false }
                     ) {
@@ -818,7 +1114,8 @@ fun WorkflowDialog(
                             onClick = {
                                 onCategoryChange(null)
                                 expanded = false
-                            }
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                         )
                         categories.forEach { category ->
                             DropdownMenuItem(
@@ -839,7 +1136,8 @@ fun WorkflowDialog(
                                 onClick = {
                                     onCategoryChange(category)
                                     expanded = false
-                                }
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                             )
                         }
                     }
@@ -854,21 +1152,21 @@ fun WorkflowDialog(
                     contentColor = MaterialTheme.colorScheme.primary
                 )
             ) {
-                Text("Save")
+                Text("OK")
             }
         },
         dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            ) {
-                Text("Cancel")
+            if (isCancelEnabled) {
+                TextButton(
+                    onClick = onDismissRequest,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                ) {
+                    Text("Cancel")
+                }
             }
-        },
-        shape = RoundedCornerShape(16.dp),
-        containerColor = MaterialTheme.colorScheme.surface
+        }
     )
 }
 
@@ -963,7 +1261,7 @@ fun DetailedWorkflowEditor(
                             unfocusedBorderColor = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     )
-                    ExposedDropdownMenu(
+                    DropdownMenu(
                         expanded = expanded,
                         onDismissRequest = { expanded = false }
                     ) {
@@ -973,7 +1271,8 @@ fun DetailedWorkflowEditor(
                                 onCategoryChange(null)
                                 selectedCategory = null
                                 expanded = false
-                            }
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                         )
                         categories.forEach { category ->
                             DropdownMenuItem(
@@ -995,7 +1294,8 @@ fun DetailedWorkflowEditor(
                                     onCategoryChange(category)
                                     selectedCategory = category
                                     expanded = false
-                                }
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                             )
                         }
                         DropdownMenuItem(
@@ -1003,7 +1303,8 @@ fun DetailedWorkflowEditor(
                             onClick = {
                                 showCategoryDialog = true
                                 expanded = false
-                            }
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                         )
                     }
                 }
@@ -1099,7 +1400,7 @@ fun DetailedWorkflowEditor(
     if (showCategoryDialog) {
         AlertDialog(
             onDismissRequest = { showCategoryDialog = false },
-            title = { Text("Create New Category") },
+            title = { Text("New Category") },
             text = {
                 Column {
                     OutlinedTextField(
@@ -1126,7 +1427,7 @@ fun DetailedWorkflowEditor(
                                 .menuAnchor(),
                             shape = RoundedCornerShape(12.dp)
                         )
-                        ExposedDropdownMenu(
+                        DropdownMenu(
                             expanded = isColorDropdownExpanded,
                             onDismissRequest = { isColorDropdownExpanded = false }
                         ) {
@@ -1149,7 +1450,8 @@ fun DetailedWorkflowEditor(
                                     onClick = {
                                         selectedColor = color
                                         isColorDropdownExpanded = false
-                                    }
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                 )
                             }
                         }
@@ -1169,16 +1471,14 @@ fun DetailedWorkflowEditor(
                     },
                     enabled = newCategoryName.isNotBlank()
                 ) {
-                    Text("Save")
+                    Text("OK")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showCategoryDialog = false }) {
                     Text("Cancel")
                 }
-            },
-            shape = RoundedCornerShape(16.dp),
-            containerColor = MaterialTheme.colorScheme.surface
+            }
         )
     }
 }
@@ -1264,12 +1564,14 @@ fun ActionCard(
 fun FilledButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     content: @Composable RowScope.() -> Unit
 ) {
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = tween(durationMillis = 150)
+        animationSpec = tween(durationMillis = 150),
+        label = "scale"
     )
 
     Button(
@@ -1285,6 +1587,7 @@ fun FilledButton(
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onPrimary
         ),
+        enabled = enabled,
         content = { Row(content = content) }
     )
 }
@@ -1298,7 +1601,8 @@ fun FilledIconButton(
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = tween(durationMillis = 150)
+        animationSpec = tween(durationMillis = 150),
+        label = "scale"
     )
 
     IconButton(
@@ -1322,5 +1626,6 @@ fun FilledIconButton(
         }
     }
 }
+
 
 

@@ -42,6 +42,10 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
@@ -51,25 +55,21 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInClient
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
 import java.io.File
 
 class MainActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
-    @Suppress("DEPRECATION")
     private lateinit var googleSignInClient: GoogleSignInClient
-    @Suppress("DEPRECATION")
+
     private val signInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        @Suppress("DEPRECATION")
         val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
         try {
             val account = task.getResult(ApiException::class.java)
-            firebaseAuthWithGoogle(account.idToken!!)
+            account.idToken?.let { firebaseAuthWithGoogle(it) } ?: run {
+                Toast.makeText(this, "Google Sign-In failed: No ID token", Toast.LENGTH_SHORT).show()
+            }
         } catch (e: ApiException) {
-            Toast.makeText(this, "Google Sign-In failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Google Sign-In failed: ${e.statusCode} - ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -79,21 +79,19 @@ class MainActivity : ComponentActivity() {
             if (task.isSuccessful) {
                 setContent { AppContent() }
             } else {
-                Toast.makeText(this, "Authentication failed", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Authentication failed: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
-    @Suppress("DEPRECATION")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         auth = Firebase.auth
-        @Suppress("DEPRECATION")
+
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken("641971734866-hf0e54q8su9rqoklq5nf44i4rl29h07o.apps.googleusercontent.com") // Replace with correct Web Client ID
+            .requestIdToken(getString(R.string.default_web_client_id))
             .requestEmail()
             .build()
-        @Suppress("DEPRECATION")
         googleSignInClient = GoogleSignIn.getClient(this, gso)
 
         // Request permissions
@@ -308,7 +306,7 @@ fun ModelInvocationScreen(onBack: () -> Unit) {
     var outputText by remember { mutableStateOf("") }
     var isProcessing by remember { mutableStateOf(false) }
     val imagePicker = ActivityResultContracts.GetContent()
-    val imageLauncher = rememberLauncherForActivityResult(imagePicker) { uri ->
+    val imageLauncher = rememberLauncherForActivityResult(contract = imagePicker) { uri ->
         imagePath = uri?.toString()
     }
 

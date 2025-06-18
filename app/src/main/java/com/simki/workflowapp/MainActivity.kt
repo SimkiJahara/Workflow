@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -77,9 +78,20 @@ class MainActivity : ComponentActivity() {
         val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(idToken, null)
         auth.signInWithCredential(credential).addOnCompleteListener(this) { task ->
             if (task.isSuccessful) {
-                setContent { AppContent() }
+                setContent { AppContent(onSignOut = { signOut() }) }
             } else {
                 Toast.makeText(this, "Authentication failed: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun signOut() {
+        auth.signOut()
+        googleSignInClient.signOut().addOnCompleteListener(this) { task ->
+            if (task.isSuccessful) {
+                setContent { LoginScreen { signInLauncher.launch(googleSignInClient.signInIntent) } }
+            } else {
+                Toast.makeText(this, "Sign-out failed: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -89,16 +101,15 @@ class MainActivity : ComponentActivity() {
         auth = Firebase.auth
 
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(getString(R.string.default_web_client_id))
+            .requestIdToken(getString(R.string.default_web_client_id)) // Corrected resource reference
             .requestEmail()
             .build()
         googleSignInClient = GoogleSignIn.getClient(this, gso)
 
-        // Request permissions
         requestPermissions()
 
         if (auth.currentUser != null) {
-            setContent { AppContent() }
+            setContent { AppContent(onSignOut = { signOut() }) }
         } else {
             setContent { LoginScreen { signInLauncher.launch(googleSignInClient.signInIntent) } }
         }
@@ -125,7 +136,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun AppContent() {
+fun AppContent(onSignOut: () -> Unit) {
     var isDarkTheme by remember { mutableStateOf(false) }
     var currentScreen by remember { mutableStateOf("home") }
     MaterialTheme(
@@ -139,7 +150,8 @@ fun AppContent() {
                 when (screen) {
                     "home" -> WorkflowApp(
                         onToggleTheme = { isDarkTheme = !isDarkTheme },
-                        onModelScreen = { currentScreen = "model" }
+                        onModelScreen = { currentScreen = "model" },
+                        onSignOut = onSignOut
                     )
                     "model" -> ModelInvocationScreen(
                         onBack = { currentScreen = "home" }
@@ -149,59 +161,14 @@ fun AppContent() {
         }
     }
 }
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoginScreen(onSignInClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Welcome to Workflow App",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        FilledButton(
-            onClick = onSignInClick,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Login, contentDescription = "Sign In", tint = MaterialTheme.colorScheme.onPrimary)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Sign in with Google", color = MaterialTheme.colorScheme.onPrimary)
-            }
-        }
-    }
-}
-
-@Serializable
-data class Category(
-    val name: String,
-    val color: String
-)
-
-@Serializable
-data class Workflow(
-    val name: String,
-    val actions: List<String> = emptyList(),
-    val category: Category? = null
-)
-
-object Spacing {
-    val small: Dp = 8.dp
-    val medium: Dp = 16.dp
-}
-
-@Composable
-fun WorkflowApp(onToggleTheme: () -> Unit, onModelScreen: () -> Unit) {
+fun WorkflowApp(
+    onToggleTheme: () -> Unit,
+    onModelScreen: () -> Unit,
+    onSignOut: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     val sharedPreferences = context.getSharedPreferences("WorkflowPrefs", Context.MODE_PRIVATE)
     val snackbarHostState = remember { SnackbarHostState() }
@@ -233,6 +200,24 @@ fun WorkflowApp(onToggleTheme: () -> Unit, onModelScreen: () -> Unit) {
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
         contentColor = MaterialTheme.colorScheme.onBackground,
+        topBar = {
+            TopAppBar(
+                title = { Text("Workflow App") },
+                actions = {
+                    IconButton(onClick = onSignOut) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Logout,
+                            contentDescription = "Sign Out",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        },
         content = { padding ->
             Crossfade(targetState = selectedWorkflowIndex >= 0) { isEditorOpen ->
                 if (isEditorOpen) {
@@ -294,6 +279,56 @@ fun WorkflowApp(onToggleTheme: () -> Unit, onModelScreen: () -> Unit) {
             }
         }
     )
+}
+
+@Composable
+fun LoginScreen(onSignInClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Welcome to Workflow App",
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        FilledButton(
+            onClick = onSignInClick,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Login, contentDescription = "Sign In", tint = MaterialTheme.colorScheme.onPrimary)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Sign in with Google", color = MaterialTheme.colorScheme.onPrimary)
+            }
+        }
+    }
+}
+
+@Serializable
+data class Category(
+    val name: String,
+    val color: String
+)
+
+@Serializable
+data class Workflow(
+    val name: String,
+    val actions: List<String> = emptyList(),
+    val category: Category? = null
+)
+
+object Spacing {
+    val small: Dp = 8.dp
+    val medium: Dp = 16.dp
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -61,6 +61,7 @@ import java.io.File
 class MainActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
     private lateinit var googleSignInClient: GoogleSignInClient
+    private lateinit var mobileBert: MobileBert // Added for M1 integration
 
     private val signInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
@@ -99,9 +100,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         auth = Firebase.auth
+        mobileBert = MobileBert(this) // Initialize MobileBert here
 
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(getString(R.string.default_web_client_id)) // Corrected resource reference
+            .requestIdToken(getString(R.string.default_web_client_id))
             .requestEmail()
             .build()
         googleSignInClient = GoogleSignIn.getClient(this, gso)
@@ -133,6 +135,48 @@ class MainActivity : ComponentActivity() {
         }
         launcher.launch(permissions.toTypedArray())
     }
+
+    // Updated invokeM1 to use MobileBert
+    fun invokeM1(input: String): String {
+        return try {
+            mobileBert.predict(input) // Use the MobileBert instance
+        } catch (e: Exception) {
+            "Error: ${e.message}"
+        }
+    }
+
+    // Keep the existing invokeM2 as a placeholder
+    fun invokeM2(input: String, image: File?): String {
+        return if (image != null) {
+            "M2 Output: Processed '$input' with image ${image.name}"
+        } else {
+            "M2 Error: No image provided"
+        }
+    }
+
+    fun showNotification(context: Context, title: String, message: String) {
+        val channelId = "model_results"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = android.app.NotificationChannel(
+                channelId,
+                "Model Results",
+                android.app.NotificationManager.IMPORTANCE_DEFAULT
+            )
+            val notificationManager = context.getSystemService(android.app.NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            NotificationManagerCompat.from(context).notify(System.currentTimeMillis().toInt(), notification)
+        }
+    }
 }
 
 @Composable
@@ -161,6 +205,7 @@ fun AppContent(onSignOut: () -> Unit) {
         }
     }
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkflowApp(
@@ -444,7 +489,6 @@ fun ModelInvocationScreen(onBack: () -> Unit) {
         }
     )
 }
-
 // Placeholder for M1 (Instruction-following LLM)
 fun invokeM1(input: String): String {
     return "M1 Output: Processed '$input'"
@@ -540,7 +584,6 @@ val predefinedColors = listOf(
     Pair("Pink", "#E91E63"),
     Pair("Teal", "#009688")
 )
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkflowHomeScreen(
@@ -925,34 +968,34 @@ fun WorkflowHomeScreen(
                             }
                             IconButton(
                                 onClick = {
-                                    onCategoriesChanged(categories.filter { it != category })
-                                    onWorkflowsChanged(
-                                        workflows.map {
-                                            if (it.category == category) it.copy(category = null) else it
-                                        }
-                                    )
-                                    CoroutineScope(Dispatchers.Main).launch {
-                                        snackbarHostState.showSnackbar("Category deleted")
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = "Delete Category",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showManageCategoriesDialog = false }) {
-                    Text("Done")
-                }
-            }
-        )
+onCategoriesChanged(categories.filter { it != category })
+onWorkflowsChanged(
+workflows.map {
+    if (it.category == category) it.copy(category = null) else it
+}
+)
+CoroutineScope(Dispatchers.Main).launch {
+    snackbarHostState.showSnackbar("Category deleted")
+}
+}
+) {
+    Icon(
+        Icons.Default.Delete,
+        contentDescription = "Delete Category",
+        tint = MaterialTheme.colorScheme.error
+    )
+}
+}
+}
+}
+},
+confirmButton = {
+    TextButton(onClick = { showManageCategoriesDialog = false }) {
+        Text("Done")
     }
+}
+)
+}
 }
 
 @Composable

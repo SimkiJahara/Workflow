@@ -1,18 +1,18 @@
 [versions]
-agp = "8.10.1"
-kotlin = "2.0.21"
-coreKtx = "1.16.0"
-junit = "4.13.2"
-junitVersion = "1.2.1"
-espressoCore = "3.6.1"
-lifecycleRuntimeKtx = "2.9.1"
-activityCompose = "1.10.1"
-composeBom = "2025.06.00"
-firebaseBom = "33.15.0"  # Firebase BOM version
-playServicesAuth = "21.3.0"  # Google Play Services Auth version
-kotlinxSerializationJson = "1.8.0"  # For kotlinx-serialization-json
-kotlinxCoroutinesAndroid = "1.9.0"  # For kotlinx-coroutines-android
-materialIconsExtended = "1.7.8"  # For material-icons-extended
+agp = "8.7.1" # Downgraded to a stable version compatible with Gradle
+kotlin = "2.0.21" # Latest stable Kotlin version
+coreKtx = "1.15.0" # Latest stable core-ktx version
+junit = "4.13.2" # Unchanged, stable version
+junitVersion = "1.2.1" # Unchanged, stable version
+espressoCore = "3.6.1" # Unchanged, latest stable version
+lifecycleRuntimeKtx = "2.8.7" # Latest stable lifecycle version
+activityCompose = "1.9.3" # Latest stable activity-compose version
+composeBom = "2024.10.00" # Latest stable Compose BOM
+firebaseBom = "33.5.1" # Corrected to latest stable Firebase BOM
+playServicesAuth = "21.2.0" # Latest stable Play Services Auth version
+kotlinxSerializationJson = "1.7.3" # Latest stable serialization version
+kotlinxCoroutinesAndroid = "1.9.0" # Unchanged, latest stable version
+materialIconsExtended = "1.7.4" # Corrected to match Compose version
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -42,6 +43,10 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.ktx.auth
 import com.google.firebase.ktx.Firebase
@@ -51,25 +56,22 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInClient
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
 import java.io.File
 
 class MainActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
-    @Suppress("DEPRECATION")
     private lateinit var googleSignInClient: GoogleSignInClient
-    @Suppress("DEPRECATION")
+    private lateinit var mobileBert: MobileBert // Added for M1 integration
+
     private val signInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        @Suppress("DEPRECATION")
         val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
         try {
             val account = task.getResult(ApiException::class.java)
-            firebaseAuthWithGoogle(account.idToken!!)
+            account.idToken?.let { firebaseAuthWithGoogle(it) } ?: run {
+                Toast.makeText(this, "Google Sign-In failed: No ID token", Toast.LENGTH_SHORT).show()
+            }
         } catch (e: ApiException) {
-            Toast.makeText(this, "Google Sign-In failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Google Sign-In failed: ${e.statusCode} - ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -77,30 +79,39 @@ class MainActivity : ComponentActivity() {
         val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(idToken, null)
         auth.signInWithCredential(credential).addOnCompleteListener(this) { task ->
             if (task.isSuccessful) {
-                setContent { AppContent() }
+                setContent { AppContent(onSignOut = { signOut() }) }
             } else {
-                Toast.makeText(this, "Authentication failed", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Authentication failed: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
-    @Suppress("DEPRECATION")
+    private fun signOut() {
+        auth.signOut()
+        googleSignInClient.signOut().addOnCompleteListener(this) { task ->
+            if (task.isSuccessful) {
+                setContent { LoginScreen { signInLauncher.launch(googleSignInClient.signInIntent) } }
+            } else {
+                Toast.makeText(this, "Sign-out failed: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         auth = Firebase.auth
-        @Suppress("DEPRECATION")
+        mobileBert = MobileBert(this) // Initialize MobileBert here
+
         val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken("641971734866-hf0e54q8su9rqoklq5nf44i4rl29h07o.apps.googleusercontent.com") // Replace with correct Web Client ID
+            .requestIdToken(getString(R.string.default_web_client_id))
             .requestEmail()
             .build()
-        @Suppress("DEPRECATION")
         googleSignInClient = GoogleSignIn.getClient(this, gso)
 
-        // Request permissions
         requestPermissions()
 
         if (auth.currentUser != null) {
-            setContent { AppContent() }
+            setContent { AppContent(onSignOut = { signOut() }) }
         } else {
             setContent { LoginScreen { signInLauncher.launch(googleSignInClient.signInIntent) } }
         }
@@ -124,10 +135,52 @@ class MainActivity : ComponentActivity() {
         }
         launcher.launch(permissions.toTypedArray())
     }
+
+    // Updated invokeM1 to use MobileBert
+    fun invokeM1(input: String): String {
+        return try {
+            mobileBert.predict(input) // Use the MobileBert instance
+        } catch (e: Exception) {
+            "Error: ${e.message}"
+        }
+    }
+
+    // Keep the existing invokeM2 as a placeholder
+    fun invokeM2(input: String, image: File?): String {
+        return if (image != null) {
+            "M2 Output: Processed '$input' with image ${image.name}"
+        } else {
+            "M2 Error: No image provided"
+        }
+    }
+
+    fun showNotification(context: Context, title: String, message: String) {
+        val channelId = "model_results"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = android.app.NotificationChannel(
+                channelId,
+                "Model Results",
+                android.app.NotificationManager.IMPORTANCE_DEFAULT
+            )
+            val notificationManager = context.getSystemService(android.app.NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .build()
+
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            NotificationManagerCompat.from(context).notify(System.currentTimeMillis().toInt(), notification)
+        }
+    }
 }
 
 @Composable
-fun AppContent() {
+fun AppContent(onSignOut: () -> Unit) {
     var isDarkTheme by remember { mutableStateOf(false) }
     var currentScreen by remember { mutableStateOf("home") }
     MaterialTheme(
@@ -141,7 +194,8 @@ fun AppContent() {
                 when (screen) {
                     "home" -> WorkflowApp(
                         onToggleTheme = { isDarkTheme = !isDarkTheme },
-                        onModelScreen = { currentScreen = "model" }
+                        onModelScreen = { currentScreen = "model" },
+                        onSignOut = onSignOut
                     )
                     "model" -> ModelInvocationScreen(
                         onBack = { currentScreen = "home" }
@@ -152,58 +206,14 @@ fun AppContent() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoginScreen(onSignInClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "Welcome to Workflow App",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        FilledButton(
-            onClick = onSignInClick,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(Icons.AutoMirrored.Filled.Login, contentDescription = "Sign In", tint = MaterialTheme.colorScheme.onPrimary)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Sign in with Google", color = MaterialTheme.colorScheme.onPrimary)
-            }
-        }
-    }
-}
-
-@Serializable
-data class Category(
-    val name: String,
-    val color: String
-)
-
-@Serializable
-data class Workflow(
-    val name: String,
-    val actions: List<String> = emptyList(),
-    val category: Category? = null
-)
-
-object Spacing {
-    val small: Dp = 8.dp
-    val medium: Dp = 16.dp
-}
-
-@Composable
-fun WorkflowApp(onToggleTheme: () -> Unit, onModelScreen: () -> Unit) {
+fun WorkflowApp(
+    onToggleTheme: () -> Unit,
+    onModelScreen: () -> Unit,
+    onSignOut: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     val sharedPreferences = context.getSharedPreferences("WorkflowPrefs", Context.MODE_PRIVATE)
     val snackbarHostState = remember { SnackbarHostState() }
@@ -235,6 +245,24 @@ fun WorkflowApp(onToggleTheme: () -> Unit, onModelScreen: () -> Unit) {
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
         contentColor = MaterialTheme.colorScheme.onBackground,
+        topBar = {
+            TopAppBar(
+                title = { Text("Workflow App") },
+                actions = {
+                    IconButton(onClick = onSignOut) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Logout,
+                            contentDescription = "Sign Out",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        },
         content = { padding ->
             Crossfade(targetState = selectedWorkflowIndex >= 0) { isEditorOpen ->
                 if (isEditorOpen) {
@@ -298,6 +326,56 @@ fun WorkflowApp(onToggleTheme: () -> Unit, onModelScreen: () -> Unit) {
     )
 }
 
+@Composable
+fun LoginScreen(onSignInClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Welcome to Workflow App",
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        FilledButton(
+            onClick = onSignInClick,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Login, contentDescription = "Sign In", tint = MaterialTheme.colorScheme.onPrimary)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Sign in with Google", color = MaterialTheme.colorScheme.onPrimary)
+            }
+        }
+    }
+}
+
+@Serializable
+data class Category(
+    val name: String,
+    val color: String
+)
+
+@Serializable
+data class Workflow(
+    val name: String,
+    val actions: List<String> = emptyList(),
+    val category: Category? = null
+)
+
+object Spacing {
+    val small: Dp = 8.dp
+    val medium: Dp = 16.dp
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelInvocationScreen(onBack: () -> Unit) {
@@ -308,7 +386,7 @@ fun ModelInvocationScreen(onBack: () -> Unit) {
     var outputText by remember { mutableStateOf("") }
     var isProcessing by remember { mutableStateOf(false) }
     val imagePicker = ActivityResultContracts.GetContent()
-    val imageLauncher = rememberLauncherForActivityResult(imagePicker) { uri ->
+    val imageLauncher = rememberLauncherForActivityResult(contract = imagePicker) { uri ->
         imagePath = uri?.toString()
     }
 
@@ -411,7 +489,6 @@ fun ModelInvocationScreen(onBack: () -> Unit) {
         }
     )
 }
-
 // Placeholder for M1 (Instruction-following LLM)
 fun invokeM1(input: String): String {
     return "M1 Output: Processed '$input'"
@@ -507,7 +584,6 @@ val predefinedColors = listOf(
     Pair("Pink", "#E91E63"),
     Pair("Teal", "#009688")
 )
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkflowHomeScreen(
@@ -892,34 +968,34 @@ fun WorkflowHomeScreen(
                             }
                             IconButton(
                                 onClick = {
-                                    onCategoriesChanged(categories.filter { it != category })
-                                    onWorkflowsChanged(
-                                        workflows.map {
-                                            if (it.category == category) it.copy(category = null) else it
-                                        }
-                                    )
-                                    CoroutineScope(Dispatchers.Main).launch {
-                                        snackbarHostState.showSnackbar("Category deleted")
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = "Delete Category",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showManageCategoriesDialog = false }) {
-                    Text("Done")
-                }
-            }
-        )
+onCategoriesChanged(categories.filter { it != category })
+onWorkflowsChanged(
+workflows.map {
+    if (it.category == category) it.copy(category = null) else it
+}
+)
+CoroutineScope(Dispatchers.Main).launch {
+    snackbarHostState.showSnackbar("Category deleted")
+}
+}
+) {
+    Icon(
+        Icons.Default.Delete,
+        contentDescription = "Delete Category",
+        tint = MaterialTheme.colorScheme.error
+    )
+}
+}
+}
+}
+},
+confirmButton = {
+    TextButton(onClick = { showManageCategoriesDialog = false }) {
+        Text("Done")
     }
+}
+)
+}
 }
 
 @Composable

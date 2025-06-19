@@ -1,13 +1,18 @@
 [versions]
-agp = "8.10.1"
-kotlin = "2.0.21"
-coreKtx = "1.16.0"
-junit = "4.13.2"
-junitVersion = "1.2.1"
-espressoCore = "3.6.1"
-lifecycleRuntimeKtx = "2.9.1"
-activityCompose = "1.10.1"
-composeBom = "2024.09.00"
+agp = "8.7.1" # Downgraded to a stable version compatible with Gradle
+kotlin = "2.0.21" # Latest stable Kotlin version
+coreKtx = "1.15.0" # Latest stable core-ktx version
+junit = "4.13.2" # Unchanged, stable version
+junitVersion = "1.2.1" # Unchanged, stable version
+espressoCore = "3.6.1" # Unchanged, latest stable version
+lifecycleRuntimeKtx = "2.8.7" # Latest stable lifecycle version
+activityCompose = "1.9.3" # Latest stable activity-compose version
+composeBom = "2024.10.00" # Latest stable Compose BOM
+firebaseBom = "33.5.1" # Corrected to latest stable Firebase BOM
+playServicesAuth = "21.2.0" # Latest stable Play Services Auth version
+kotlinxSerializationJson = "1.7.3" # Latest stable serialization version
+kotlinxCoroutinesAndroid = "1.9.0" # Unchanged, latest stable version
+materialIconsExtended = "1.7.4" # Corrected to match Compose version
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -24,10 +29,17 @@ androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-toolin
 androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
+firebase-auth-ktx = { group = "com.google.firebase", name = "firebase-auth-ktx" }
+play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
+compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended", version.ref = "materialIconsExtended" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 
 

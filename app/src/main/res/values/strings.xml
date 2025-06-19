@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">Workflow App</string>
+    <string name="app_name">WorkflowApp</string>
+    <string name="default_web_client_id">641971734866-hf0e54q8su9rqoklq5nf44i4rl29h07o.apps.googleusercontent.com</string>
 </resources>

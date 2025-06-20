@@ -32,22 +32,20 @@ class BertTokenizer(context: Context) {
         return vocabMap
     }
 
-    fun tokenize(text: String): IntArray {
-        // Basic tokenization: split by whitespace and map to vocab IDs
-        val tokens = text.lowercase()
-            .split("\\s+".toRegex())
-            .mapNotNull { word ->
-                vocab[word] ?: vocab.getOrDefault("[UNK]", 0) // Fallback to [UNK] if not found
-            }
-            .toMutableList()
-
-        // Pad or truncate to maxLength
-        val inputIds = IntArray(maxLength) { 0 }
-        tokens.forEachIndexed { index, tokenId ->
-            if (index < maxLength) {
-                inputIds[index] = tokenId
-            }
+fun tokenize(text: String): IntArray {
+    val tokens = text.lowercase()
+        .split("\\s+".toRegex())
+        .mapNotNull { word ->
+            vocab[word] ?: vocab.getOrDefault("[UNK]", 0)
         }
-        return inputIds
+        .toMutableList()
+
+    // Truncate or pad to maxLength
+    val inputIds = IntArray(maxLength)
+    tokens.take(maxLength).forEachIndexed { index, tokenId ->
+        inputIds[index] = tokenId
     }
+    // Pad with 0s if necessary
+    return inputIds
+}
 }

@@ -5,6 +5,10 @@ import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+<<<<<<< Updated upstream
+=======
+import androidx.activity.result.contract.ActivityResultContracts
+>>>>>>> Stashed changes
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -36,12 +40,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+<<<<<<< Updated upstream
+=======
+import androidx.core.content.ContextCompat
+>>>>>>> Stashed changes
 import androidx.core.content.edit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+<<<<<<< Updated upstream
 import kotlinx.serialization.Serializable
 
 class MainActivity : ComponentActivity() {
@@ -55,6 +64,260 @@ class MainActivity : ComponentActivity() {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
+=======
+
+class MainActivity : ComponentActivity() {
+    private lateinit var auth: FirebaseAuth
+    private lateinit var googleSignInClient: GoogleSignInClient
+
+    private val signInLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(ApiException::class.java)
+                account.idToken?.let { firebaseAuthWithGoogle(it) } ?: run {
+                    Toast.makeText(this, "Google Sign-In failed: No ID token", Toast.LENGTH_SHORT)
+                        .show()
+                }
+            } catch (e: ApiException) {
+                Toast.makeText(
+                    this,
+                    "Google Sign-In failed: ${e.statusCode} - ${e.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+
+    private fun firebaseAuthWithGoogle(idToken: String) {
+        val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(idToken, null)
+        auth.signInWithCredential(credential).addOnCompleteListener(this) { task ->
+            if (task.isSuccessful) {
+                setContent { AppContent(onSignOut = { signOut() }) }
+            } else {
+                Toast.makeText(
+                    this,
+                    "Authentication failed: ${task.exception?.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    private fun signOut() {
+        auth.signOut()
+        googleSignInClient.signOut().addOnCompleteListener(this) { task ->
+            if (task.isSuccessful) {
+                setContent { LoginScreen { signInLauncher.launch(googleSignInClient.signInIntent) } }
+            } else {
+                Toast.makeText(
+                    this,
+                    "Sign-out failed: ${task.exception?.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        auth = Firebase.auth
+
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(getString(R.string.default_web_client_id))
+            .requestEmail()
+            .build()
+        googleSignInClient = GoogleSignIn.getClient(this, gso)
+
+        requestPermissions()
+
+        if (auth.currentUser != null) {
+            setContent { AppContent(onSignOut = { signOut() }) }
+        } else {
+            setContent { LoginScreen { signInLauncher.launch(googleSignInClient.signInIntent) } }
+        }
+    }
+
+    private fun requestPermissions() {
+        val permissions = mutableListOf(
+            Manifest.permission.CAMERA,
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        )
+        val launcher =
+            registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+                results.forEach { (permission, granted) ->
+                    if (!granted) {
+                        Toast.makeText(this, "$permission denied", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        launcher.launch(permissions.toTypedArray())
+    }
+
+    @Composable
+    fun AppContent(onSignOut: () -> Unit) {
+        var isDarkTheme by remember { mutableStateOf(false) }
+        MaterialTheme(
+            colorScheme = if (isDarkTheme) darkColorScheme() else lightColorScheme()
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background
+            ) {
+                WorkflowApp(
+                    onToggleTheme = { isDarkTheme = !isDarkTheme },
+                    onSignOut = onSignOut
+                )
+            }
+        }
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    fun WorkflowApp(
+        onToggleTheme: () -> Unit,
+        onSignOut: () -> Unit,
+        modifier: Modifier = Modifier
+    ) {
+        val context = LocalContext.current
+        val sharedPreferences = context.getSharedPreferences("WorkflowPrefs", Context.MODE_PRIVATE)
+        val snackbarHostState = remember { SnackbarHostState() }
+
+        var workflows by remember {
+            mutableStateOf(loadWorkflows(sharedPreferences))
+        }
+        var categories by remember {
+            mutableStateOf(loadCategories(sharedPreferences))
+        }
+        var workflowCounter by remember {
+            mutableIntStateOf(sharedPreferences.getInt("workflowCounter", 1))
+        }
+        var selectedWorkflowIndex by remember { mutableIntStateOf(-1) }
+
+        LaunchedEffect(workflows) {
+            saveWorkflows(sharedPreferences, workflows)
+        }
+        LaunchedEffect(categories) {
+            saveCategories(sharedPreferences, categories)
+        }
+        LaunchedEffect(workflowCounter) {
+            sharedPreferences.edit {
+                putInt("workflowCounter", workflowCounter)
+            }
+        }
+
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            containerColor = MaterialTheme.colorScheme.background,
+            contentColor = MaterialTheme.colorScheme.onBackground,
+            topBar = {
+                TopAppBar(
+                    title = { Text("Workflow App") },
+                    actions = {
+                        IconButton(onClick = onSignOut) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Logout,
+                                contentDescription = "Sign Out",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+            },
+            content = { padding ->
+                Crossfade(targetState = selectedWorkflowIndex >= 0) { isEditorOpen ->
+                    if (isEditorOpen) {
+                        DetailedWorkflowEditor(
+                            workflow = workflows[selectedWorkflowIndex],
+                            onBack = { selectedWorkflowIndex = -1 },
+                            onRename = { newName ->
+                                workflows = workflows.toMutableList().also {
+                                    it[selectedWorkflowIndex] =
+                                        it[selectedWorkflowIndex].copy(name = newName)
+                                }
+                            },
+                            onAddAction = { action ->
+                                workflows = workflows.toMutableList().also {
+                                    it[selectedWorkflowIndex] = it[selectedWorkflowIndex].copy(
+                                        actions = it[selectedWorkflowIndex].actions + action
+                                    )
+                                }
+                            },
+                            onEditAction = { index, newAction ->
+                                workflows = workflows.toMutableList().also {
+                                    val actions = it[selectedWorkflowIndex].actions.toMutableList()
+                                    actions[index] = newAction
+                                    it[selectedWorkflowIndex] =
+                                        it[selectedWorkflowIndex].copy(actions = actions)
+                                }
+                            },
+                            onDeleteAction = { index ->
+                                workflows = workflows.toMutableList().also {
+                                    val actions = it[selectedWorkflowIndex].actions.toMutableList()
+                                    actions.removeAt(index)
+                                    it[selectedWorkflowIndex] =
+                                        it[selectedWorkflowIndex].copy(actions = actions)
+                                }
+                            },
+                            onCategoryChange = { category ->
+                                workflows = workflows.toMutableList().also {
+                                    it[selectedWorkflowIndex] =
+                                        it[selectedWorkflowIndex].copy(category = category)
+                                }
+                            },
+                            categories = categories,
+                            onAddCategory = { newCategory ->
+                                categories = categories + newCategory
+                            },
+                            modifier = Modifier.padding(padding)
+                        )
+                    } else {
+                        WorkflowHomeScreen(
+                            workflows = workflows,
+                            categories = categories,
+                            workflowCounter = workflowCounter,
+                            onWorkflowsChanged = { workflows = it },
+                            onCategoriesChanged = { categories = it },
+                            onWorkflowCounterChanged = { workflowCounter = it },
+                            onWorkflowSelected = { selectedWorkflowIndex = it },
+                            onToggleTheme = onToggleTheme,
+                            snackbarHostState = snackbarHostState,
+                            modifier = Modifier.padding(padding)
+                        )
+                    }
+                }
+            }
+        )
+    }
+
+    @Composable
+    fun LoginScreen(onSignInClick: () -> Unit) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Welcome to Workflow App",
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            FilledButton(
+                onClick = onSignInClick,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+>>>>>>> Stashed changes
                 ) {
                     WorkflowApp { isDarkTheme = !isDarkTheme }
                 }
@@ -110,6 +373,7 @@ fun WorkflowApp(onToggleTheme: () -> Unit) {
         }
     }
 
+<<<<<<< Updated upstream
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
@@ -182,6 +446,17 @@ fun loadWorkflows(sharedPreferences: SharedPreferences): List<Workflow> {
         try {
             Json.decodeFromString<List<Workflow>>(json)
         } catch (e: Exception) {
+=======
+    fun loadWorkflows(sharedPreferences: SharedPreferences): List<Workflow> {
+        val json = sharedPreferences.getString("workflows", null)
+        return if (json != null) {
+            try {
+                Json.decodeFromString<List<Workflow>>(json)
+            } catch (e: Exception) {
+                emptyList()
+            }
+        } else {
+>>>>>>> Stashed changes
             emptyList()
         }
     } else {
@@ -277,11 +552,38 @@ fun WorkflowHomeScreen(
         }
     }
 
+<<<<<<< Updated upstream
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .padding(Spacing.medium)
+=======
+    val predefinedColors = listOf(
+        Pair("Red", "#F44336"),
+        Pair("Green", "#4CAF50"),
+        Pair("Blue", "#2196F3"),
+        Pair("Purple", "#9C27B0"),
+        Pair("Orange", "#FF9800"),
+        Pair("Yellow", "#FFEB3B"),
+        Pair("Pink", "#E91E63"),
+        Pair("Teal", "#009688")
+    )
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    fun WorkflowHomeScreen(
+        workflows: List<Workflow>,
+        categories: List<Category>,
+        workflowCounter: Int,
+        onWorkflowsChanged: (List<Workflow>) -> Unit,
+        onCategoriesChanged: (List<Category>) -> Unit,
+        onWorkflowCounterChanged: (Int) -> Unit,
+        onWorkflowSelected: (Int) -> Unit,
+        onToggleTheme: () -> Unit,
+        snackbarHostState: SnackbarHostState,
+        modifier: Modifier = Modifier
+>>>>>>> Stashed changes
     ) {
         OutlinedTextField(
             value = searchQuery,
@@ -347,6 +649,88 @@ fun WorkflowHomeScreen(
                     }
                 )
             }
+<<<<<<< Updated upstream
+=======
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = Spacing.medium),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "My Workflows",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                IconButton(
+                    onClick = onToggleTheme,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Brightness4,
+                        contentDescription = "Toggle Theme",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(Spacing.small, Alignment.Top)
+            ) {
+                itemsIndexed(filteredWorkflows) { index, workflow ->
+                    WorkflowCard(
+                        workflow = workflow,
+                        onEditClick = {
+                            editingIndex = workflows.indexOf(workflow)
+                            editText = workflow.name
+                            selectedCategory = workflow.category
+                            showEditDialog = true
+                        },
+                        onSelectClick = { onWorkflowSelected(workflows.indexOf(workflow)) },
+                        onDeleteClick = {
+                            onWorkflowsChanged(
+                                workflows.toMutableList()
+                                    .also { it.removeAt(workflows.indexOf(workflow)) })
+                            showDeleteSnackbar = true
+                        }
+                    )
+                }
+            }
+
+            FilledButton(
+                onClick = {
+                    newWorkflowName = "Workflow #$workflowCounter"
+                    initialAction = ""
+                    selectedCategory = null
+                    showCreateDialog = true
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = Spacing.medium)
+                    .height(56.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Add Workflow",
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Spacer(modifier = Modifier.width(Spacing.small))
+                    Text("Create New Workflow", color = MaterialTheme.colorScheme.onPrimary)
+                }
+            }
+>>>>>>> Stashed changes
         }
 
         FilledIconButton(
@@ -1258,6 +1642,7 @@ fun ActionCard(
             }
         }
     }
+<<<<<<< Updated upstream
 }
 
 @Composable
@@ -1324,3 +1709,6 @@ fun FilledIconButton(
 }
 
 
+=======
+}
+>>>>>>> Stashed changes

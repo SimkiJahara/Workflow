@@ -15,7 +15,10 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
@@ -44,6 +47,16 @@ android {
 =======
     composeOptions {
         kotlinCompilerExtensionVersion = "2.0.21"
+<<<<<<< Updated upstream
+=======
+    }
+    externalNativeBuild {
+        cmake {
+            var cppFlags = "-std=c++17"
+            path = file("D:/llm/llama.cpp/android/CMakeLists.txt")
+            version = "3.22.1"
+        }
+>>>>>>> Stashed changes
     }
     externalNativeBuild {
         cmake {
@@ -60,7 +73,10 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 =======
+=======
+>>>>>>> Stashed changes
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))
@@ -94,6 +110,9 @@ dependencies {
     implementation(libs.play.services.auth)
 
     // Testing
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
@@ -103,12 +122,16 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 }
 
 
 
 
 
+=======
+}
+>>>>>>> Stashed changes
 =======
 }
 >>>>>>> Stashed changes

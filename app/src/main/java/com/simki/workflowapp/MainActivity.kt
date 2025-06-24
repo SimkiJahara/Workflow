@@ -6,7 +6,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 =======
+=======
+>>>>>>> Stashed changes
 import androidx.activity.result.contract.ActivityResultContracts
 >>>>>>> Stashed changes
 import androidx.compose.animation.Crossfade
@@ -41,7 +44,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 =======
+=======
+>>>>>>> Stashed changes
 import androidx.core.content.ContextCompat
 >>>>>>> Stashed changes
 import androidx.core.content.edit
@@ -50,6 +56,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
 import kotlinx.serialization.Serializable
 
@@ -65,6 +72,8 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
 =======
+=======
+>>>>>>> Stashed changes
 
 class MainActivity : ComponentActivity() {
     private lateinit var auth: FirebaseAuth
@@ -374,6 +383,7 @@ fun WorkflowApp(onToggleTheme: () -> Unit) {
     }
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
@@ -447,6 +457,8 @@ fun loadWorkflows(sharedPreferences: SharedPreferences): List<Workflow> {
             Json.decodeFromString<List<Workflow>>(json)
         } catch (e: Exception) {
 =======
+=======
+>>>>>>> Stashed changes
     fun loadWorkflows(sharedPreferences: SharedPreferences): List<Workflow> {
         val json = sharedPreferences.getString("workflows", null)
         return if (json != null) {
@@ -1706,9 +1718,13 @@ fun FilledIconButton(
             content()
         }
     }
+<<<<<<< Updated upstream
 }
 
 
+=======
+}
+>>>>>>> Stashed changes
 =======
 }
 >>>>>>> Stashed changes
